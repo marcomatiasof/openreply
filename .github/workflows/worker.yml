@@ -1,0 +1,41 @@
+name: Robo OpenReply (worker 24h)
+
+# Roda o worker do OpenReply sem parar: cada execução dura ~5h50 e a próxima
+# (agendada de hora em hora) fica na fila e assume logo que a anterior termina.
+# Configuração: um único segredo WORKER_ENV com o conteúdo do .env do worker.
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: openreply-worker
+  cancel-in-progress: false
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 358
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar
+        run: |
+          npm ci
+          npm run db:generate
+
+      - name: Rodar o robô (~5h50)
+        env:
+          WORKER_ENV: ${{ secrets.WORKER_ENV }}
+        run: |
+          printf '%s\n' "$WORKER_ENV" > .env
+          set -a; . ./.env; set +a
+          timeout 20700 npm run worker || code=$?
+          if [ "${code:-0}" = "124" ]; then echo "Tempo da rodada encerrado, a próxima assume."; exit 0; fi
+          exit "${code:-0}"
