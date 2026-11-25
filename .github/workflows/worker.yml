@@ -34,8 +34,10 @@ jobs:
         env:
           WORKER_ENV: ${{ secrets.WORKER_ENV }}
         run: |
-          printf '%s\n' "$WORKER_ENV" > .env
-          set -a; . ./.env; set +a
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            case "$line" in [A-Za-z_]*=*) export "$line" ;; esac
+          done <<< "$WORKER_ENV"
           timeout 20700 npm run worker || code=$?
           if [ "${code:-0}" = "124" ]; then echo "Tempo da rodada encerrado, a próxima assume."; exit 0; fi
           exit "${code:-0}"
